@@ -15,8 +15,8 @@ const app: Application = express();
 const server = createServer(app);
 
 const corsOptions = {
-  origin: process.env.CLIENT_URL || "*",
-  credentials: false,
+  origin: process.env.CLIENT_URL || "https://e00a-223-185-39-188.ngrok-free.app",
+  credentials: true,
   methods: ["GET", "POST"],
 };
 
