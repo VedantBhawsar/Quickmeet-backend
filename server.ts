@@ -16,7 +16,7 @@ const server = createServer(app);
 
 const corsOptions = {
   origin: process.env.CLIENT_URL || "*",
-  credentials: true,
+  credentials: false,
   methods: ["GET", "POST"],
 };
 
