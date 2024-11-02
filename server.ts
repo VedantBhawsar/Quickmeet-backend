@@ -15,8 +15,11 @@ const app: Application = express();
 const server = createServer(app);
 
 const corsOptions = {
-  origin: process.env.CLIENT_URL || "*",
-  credentials: false,
+  origin: [
+    "https://e00a-223-185-39-188.ngrok-free.app",
+    "http://localhost:5173",
+  ],
+  credentials: true,
   methods: ["GET", "POST"],
 };
 
