@@ -15,7 +15,7 @@ const app: Application = express();
 const server = createServer(app);
 
 const corsOptions = {
-  origin: process.env.CLIENT_URL || "http://localhost:5173",
+  origin: process.env.CLIENT_URL || "*",
   credentials: true,
   methods: ["GET", "POST"],
 };
