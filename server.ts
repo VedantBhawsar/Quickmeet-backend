@@ -1,83 +1,106 @@
-import express, { Application, Request, Response } from "express";
-import dotenv from "dotenv";
-import { Server } from "socket.io";
+// server.ts
+interface RoomState {
+  participants: Map<
+    string,
+    {
+      socketId: string;
+      displayName: string;
+      hasVideo: boolean;
+      hasAudio: boolean;
+      isScreenSharing: boolean;
+    }
+  >;
+  created: Date;
+}
+
+interface SignalingData {
+  to: string;
+  from?: string;
+  offer?: RTCSessionDescriptionInit;
+  answer?: RTCSessionDescriptionInit;
+  candidate?: RTCIceCandidate;
+  streamId?: string;
+  type?: string;
+}
+
+import express from "express";
 import { createServer } from "http";
-import { loginUser, signupUser, getUser } from "./src/controllers/user";
-import { authMiddleware } from "./src/middlewares/authMiddleware";
-import { startMeeting } from "./src/controllers/meeting";
-import prismaClient from "./src/utils/prisma";
+import { Socket, Server as SocketServer } from "socket.io";
 import cors from "cors";
+import { UserManager } from "./src/managers /UserManger";
 
-dotenv.config();
-
-const port = process.env.PORT || 8000;
-const app: Application = express();
+const app = express();
 const server = createServer(app);
 
-const corsOptions = {
-  origin: [
-    "https://e00a-223-185-39-188.ngrok-free.app",
-    "http://localhost:5173",
-  ],
-  credentials: true,
-  methods: ["GET", "POST"],
-};
+const io = new SocketServer(server, {
+  cors: {
+    origin: ["https://quick-meet-two.vercel.app", "http://localhost:5173"],
+    methods: ["GET", "POST"],
+    credentials: true,
+  },
+});
 
-app.use(cors(corsOptions));
-const io = new Server(server, { cors: corsOptions });
+const userManager = new UserManager();
 
-const emailToSocketIdMap = new Map<string, string>();
-const socketIdToEmailMap = new Map<string, string>();
-
-io.on("connection", (socket) => {
-  console.log("User connected:", socket.id);
-
-  socket.on("join-room", (room) => {
-    socket.join(room);
-    const roomClients = io.sockets.adapter.rooms.get(room);
-    const clientsCount = roomClients ? roomClients.size : 0;
-
-    if (clientsCount === 1) {
-      socket.emit("created", room, socket.id);
-    } else if (clientsCount === 2) {
-      socket.emit("joined", room, socket.id);
-      socket.to(room).emit("peer-connected", socket.id);
-    } else {
-      socket.emit("full", room);
-    }
-  });
-
-  socket.on("offer", (data) => {
-    socket.to(data.to).emit("offer", { offer: data.offer, from: socket.id });
-  });
-
-  socket.on("answer", (data) => {
-    socket.to(data.to).emit("answer", { answer: data.answer, from: socket.id });
-  });
-
-  socket.on("ice-candidate", (data) => {
-    socket
-      .to(data.to)
-      .emit("ice-candidate", { candidate: data.candidate, from: socket.id });
-  });
-
+io.on("connection", (socket: Socket) => {
+  console.log("a user connected");
+  userManager.addUser("randomName", socket);
   socket.on("disconnect", () => {
-    console.log("User disconnected:", socket.id);
-    socket.broadcast.emit("peer-disconnected", socket.id);
+    console.log("user disconnected");
+    userManager.removeUser(socket.id);
   });
 });
 
+const rooms = new Map<string, RoomState>();
+
+app.use(cors());
 app.use(express.json());
 
-app.get("/", (req: Request, res: Response) => {
-  res.send("Welcome to Express & TypeScript Server");
+app.get("/health", (req, res) => {
+  res.json({ status: "healthy" });
 });
 
-app.post("/signup", signupUser);
-app.post("/login", loginUser);
-app.get("/user", authMiddleware, getUser);
-app.post("/start-meeting", authMiddleware, startMeeting);
+// @ts-ignore
+app.get("/room/:roomId/info", async (req, res) => {
+  const room = rooms.get(req.params.roomId);
+  if (!room) {
+    return res.status(404).json({ error: "Room not found" });
+  }
 
-server.listen(port, () => {
-  console.log(`Server is running at http://localhost:${port}`);
+  const participantsCount = room.participants.size;
+  res.json({
+    participantsCount,
+    created: room.created,
+  });
+});
+
+// Error handling
+app.use(
+  (
+    err: Error,
+    req: express.Request,
+    res: express.Response,
+    next: express.NextFunction
+  ) => {
+    console.error(err.stack);
+    res.status(500).json({
+      error: "Internal Server Error",
+      message: process.env.NODE_ENV === "development" ? err.message : undefined,
+    });
+  }
+);
+
+// Start server
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
+
+// Graceful shutdown
+process.on("SIGTERM", () => {
+  console.log("SIGTERM received. Shutting down...");
+  server.close(() => {
+    console.log("Server closed");
+    process.exit(0);
+  });
 });

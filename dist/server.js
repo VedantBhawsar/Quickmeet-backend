@@ -1,70 +1,76 @@
 "use strict";
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
-const dotenv_1 = __importDefault(require("dotenv"));
-const socket_io_1 = require("socket.io");
 const http_1 = require("http");
-const user_1 = require("./src/controllers/user");
-const authMiddleware_1 = require("./src/middlewares/authMiddleware");
-const meeting_1 = require("./src/controllers/meeting");
+const socket_io_1 = require("socket.io");
 const cors_1 = __importDefault(require("cors"));
-dotenv_1.default.config();
-const port = process.env.PORT || 8000;
+const UserManger_1 = require("./src/managers /UserManger");
 const app = (0, express_1.default)();
 const server = (0, http_1.createServer)(app);
-const corsOptions = {
-    origin: process.env.CLIENT_URL || "http://localhost:5173",
-    credentials: true,
-    methods: ["GET", "POST"],
-};
-app.use((0, cors_1.default)(corsOptions));
-const io = new socket_io_1.Server(server, { cors: corsOptions });
-const emailToSocketIdMap = new Map();
-const socketIdToEmailMap = new Map();
+const io = new socket_io_1.Server(server, {
+    cors: {
+        origin: ["https://quick-meet-two.vercel.app", "http://localhost:5173"],
+        methods: ["GET", "POST"],
+        credentials: true,
+    },
+});
+const userManager = new UserManger_1.UserManager();
 io.on("connection", (socket) => {
-    console.log("User connected:", socket.id);
-    socket.on("join-room", (room) => {
-        socket.join(room);
-        const roomClients = io.sockets.adapter.rooms.get(room);
-        const clientsCount = roomClients ? roomClients.size : 0;
-        if (clientsCount === 1) {
-            socket.emit("created", room, socket.id);
-        }
-        else if (clientsCount === 2) {
-            socket.emit("joined", room, socket.id);
-            socket.to(room).emit("peer-connected", socket.id);
-        }
-        else {
-            socket.emit("full", room);
-        }
-    });
-    socket.on("offer", (data) => {
-        socket.to(data.to).emit("offer", { offer: data.offer, from: socket.id });
-    });
-    socket.on("answer", (data) => {
-        socket.to(data.to).emit("answer", { answer: data.answer, from: socket.id });
-    });
-    socket.on("ice-candidate", (data) => {
-        socket
-            .to(data.to)
-            .emit("ice-candidate", { candidate: data.candidate, from: socket.id });
-    });
+    console.log("a user connected");
+    userManager.addUser("randomName", socket);
     socket.on("disconnect", () => {
-        console.log("User disconnected:", socket.id);
-        socket.broadcast.emit("peer-disconnected", socket.id);
+        console.log("user disconnected");
+        userManager.removeUser(socket.id);
     });
 });
+const rooms = new Map();
+app.use((0, cors_1.default)());
 app.use(express_1.default.json());
-app.get("/", (req, res) => {
-    res.send("Welcome to Express & TypeScript Server");
+app.get("/health", (req, res) => {
+    res.json({ status: "healthy" });
 });
-app.post("/signup", user_1.signupUser);
-app.post("/login", user_1.loginUser);
-app.get("/user", authMiddleware_1.authMiddleware, user_1.getUser);
-app.post("/start-meeting", authMiddleware_1.authMiddleware, meeting_1.startMeeting);
-server.listen(port, () => {
-    console.log(`Server is running at http://localhost:${port}`);
+// @ts-ignore
+app.get("/room/:roomId/info", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const room = rooms.get(req.params.roomId);
+    if (!room) {
+        return res.status(404).json({ error: "Room not found" });
+    }
+    const participantsCount = room.participants.size;
+    res.json({
+        participantsCount,
+        created: room.created,
+    });
+}));
+// Error handling
+app.use((err, req, res, next) => {
+    console.error(err.stack);
+    res.status(500).json({
+        error: "Internal Server Error",
+        message: process.env.NODE_ENV === "development" ? err.message : undefined,
+    });
+});
+// Start server
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+});
+// Graceful shutdown
+process.on("SIGTERM", () => {
+    console.log("SIGTERM received. Shutting down...");
+    server.close(() => {
+        console.log("Server closed");
+        process.exit(0);
+    });
 });
