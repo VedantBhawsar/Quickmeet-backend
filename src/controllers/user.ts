@@ -37,8 +37,9 @@ export const signupUser: RequestHandler = async (req, res) => {
 export const loginUser: RequestHandler = async (req, res) => {
   try {
     const { email, password } = req.body;
+    console.log(email, password);
     const user = await prismaClient.user.findFirst({ where: { email } });
-
+    console.log(user);
     if (!user) {
       res.status(400).json({ message: "User not found" });
       return;
@@ -71,6 +72,8 @@ export const getUser: RequestHandler = async (req: RequestWithUser, res) => {
     const user = await prismaClient.user.findFirst({
       where: { id: userId },
     });
+
+    console.log(userId);
     if (!user) {
       res.status(401).json({ message: "User not found" });
     }

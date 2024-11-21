@@ -43,7 +43,9 @@ exports.signupUser = signupUser;
 const loginUser = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { email, password } = req.body;
+        console.log(email, password);
         const user = yield prisma_1.default.user.findFirst({ where: { email } });
+        console.log(user);
         if (!user) {
             res.status(400).json({ message: "User not found" });
             return;
@@ -69,6 +71,7 @@ const getUser = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         const user = yield prisma_1.default.user.findFirst({
             where: { id: userId },
         });
+        console.log(userId);
         if (!user) {
             res.status(401).json({ message: "User not found" });
         }

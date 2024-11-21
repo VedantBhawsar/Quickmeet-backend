@@ -28,6 +28,9 @@ import { createServer } from "http";
 import { Socket, Server as SocketServer } from "socket.io";
 import cors from "cors";
 import { UserManager } from "./src/managers /UserManger";
+import { getUser, loginUser, signupUser } from "./src/controllers/user";
+import { startMeeting } from "./src/controllers/meeting";
+import { authMiddleware } from "./src/middlewares/authMiddleware";
 
 const app = express();
 const server = createServer(app);
@@ -74,6 +77,11 @@ app.get("/room/:roomId/info", async (req, res) => {
   });
 });
 
+app.post("/login", loginUser);
+app.get("/user", authMiddleware, getUser);
+app.post("/register", signupUser);
+app.post("/start-meeting", authMiddleware, startMeeting);
+
 // Error handling
 app.use(
   (
@@ -92,6 +100,12 @@ app.use(
 
 // Start server
 const PORT = process.env.PORT || 3000;
+
+app.get("/", (req, res) => {
+  res.status(200).json({
+    message: "Welcome to quickmeet backend",
+  });
+});
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
